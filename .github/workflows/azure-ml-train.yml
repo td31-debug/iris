@@ -14,6 +14,8 @@ on:
 jobs:
   train:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
       # Step 1: Checkout code
@@ -34,7 +36,7 @@ jobs:
       
       # Step 4: Authenticate with Azure
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       
