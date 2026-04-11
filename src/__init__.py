@@ -20,4 +20,4 @@ try:
 except ImportError:
     pass
 
-__all__ = ["train", "job", "connect_workspace", "register_model", "mlflow_config"]
+__all__ = ["train", "job", "connect_workspace"]
