@@ -52,10 +52,14 @@ mlflow.set_experiment("iris-training")
 # Clear any stale run ID Azure might have injected
 os.environ.pop("MLFLOW_RUN_ID", None)
 
+# Disable autolog due to NumPy 2.x compatibility issues
+# Just do manual logging instead (more reliable)
 try:
-    mlflow.autolog(disable_for_unsupported_versions=True)
-except:
-    print("⚠️  Autolog not available")
+    # Skip autolog - causes NumPy 2.x conflicts
+    # mlflow.autolog(disable_for_unsupported_versions=True)
+    pass
+except Exception as e:
+    print(f"⚠️  Autolog failed: {type(e).__name__}")
 
 # Create models directory
 os.makedirs("models", exist_ok=True)
@@ -95,8 +99,14 @@ with mlflow.start_run():
     # Save and log model
     model_path = "models/model.pkl"
     joblib.dump(model, model_path)
-    mlflow.sklearn.log_model(model, "iris-model")
-    mlflow.log_artifact(model_path, "models")
+    
+    # Only log model to MLflow if tracking URI is set and accessible
+    try:
+        mlflow.sklearn.log_model(model, "iris-model")
+        mlflow.log_artifact(model_path, "models")
+    except Exception as e:
+        print(f"⚠️  Skipping MLflow model logging: {type(e).__name__}")
+        print("   (Model still saved locally at models/model.pkl)")
     
     print("\n" + "="*60)
     print("✅ TRAINING COMPLETE")
