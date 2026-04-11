@@ -13,7 +13,7 @@ def setup_mlflow():
     try:
         # Check if running on Azure ML (has config.json)
         if os.path.exists("configs/config.json"):
-            # Try Azure ML connection (won't work in local sklearn env, but OK to fail)
+            # Try Azure ML connection
             try:
                 from azure.identity import DefaultAzureCredential
                 from azure.ai.ml import MLClient
@@ -48,6 +48,9 @@ def setup_mlflow():
 setup_mlflow()
 mlflow.set_experiment("iris-training")
 
+# Clear any stale run ID Azure might have injected
+os.environ.pop("MLFLOW_RUN_ID", None)
+
 try:
     mlflow.autolog(disable_for_unsupported_versions=True)
 except:
@@ -62,23 +65,25 @@ X_train, X_test, y_train, y_test = train_test_split(
     data.data, data.target, test_size=0.2, random_state=42
 )
 
-# Log parameters directly (no start_run context)
-mlflow.log_params({
-    "n_estimators": 100,
-    "test_size": 0.2,
-    "random_state": 42
-})
-
-# Train model
-model = RandomForestClassifier(random_state=42)
-model.fit(X_train, y_train)
-
-# Calculate and log metrics
-accuracy = accuracy_score(y_test, model.predict(X_test))
-mlflow.log_metric("accuracy", accuracy)
-
-# Save model
-joblib.dump(model, "models/model.pkl")
-mlflow.sklearn.log_model(model, "iris-model")
-
-print(f"Model trained and saved! Accuracy: {accuracy:.4f}")
+# Explicitly start a fresh run
+with mlflow.start_run():
+    # Log parameters
+    mlflow.log_params({
+        "n_estimators": 100,
+        "test_size": 0.2,
+        "random_state": 42
+    })
+    
+    # Train model
+    model = RandomForestClassifier(random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Calculate and log metrics
+    accuracy = accuracy_score(y_test, model.predict(X_test))
+    mlflow.log_metric("accuracy", accuracy)
+    
+    # Save model
+    joblib.dump(model, "models/model.pkl")
+    mlflow.sklearn.log_model(model, "iris-model")
+    
+    print(f"Model trained and saved! Accuracy: {accuracy:.4f}")
