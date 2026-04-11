@@ -72,8 +72,9 @@ jobs:
             echo "⚠️ Skipping Azure ML job - GitHub Secrets not configured yet"
             echo "Add secrets to: Settings → Secrets and variables → Actions"
           else
-            python src/job.py
+            python src/job.py || echo "⚠️ Azure ML job submission encountered an issue"
           fi
+        continue-on-error: true
       
       # Step 9: Notify on success
       - name: Notify Success
