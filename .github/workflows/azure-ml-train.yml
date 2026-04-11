@@ -34,9 +34,10 @@ jobs:
       
       # Step 4: Authenticate with Azure
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+        continue-on-error: true
       
       # Step 5: Run local tests
       - name: Run tests
@@ -46,14 +47,18 @@ jobs:
       # Step 6: Train locally (optional - for quick validation)
       - name: Train model locally
         run: |
+          set -e
           python src/train.py
+        continue-on-error: false
       
       # Step 7: Upload model artifact
       - name: Upload model artifact
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: trained-model
           path: models/model.pkl
+        continue-on-error: true
       
       # Step 6: Submit job to Azure ML
       - name: Submit Azure ML Job
