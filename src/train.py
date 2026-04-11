@@ -52,14 +52,8 @@ mlflow.set_experiment("iris-training")
 # Clear any stale run ID Azure might have injected
 os.environ.pop("MLFLOW_RUN_ID", None)
 
-# Disable autolog due to NumPy 2.x compatibility issues
-# Just do manual logging instead (more reliable)
-try:
-    # Skip autolog - causes NumPy 2.x conflicts
-    # mlflow.autolog(disable_for_unsupported_versions=True)
-    pass
-except Exception as e:
-    print(f"⚠️  Autolog failed: {type(e).__name__}")
+# Note: Disabled autolog due to NumPy 2.x compatibility issues
+# Using manual metric logging instead (more reliable)
 
 # Create models directory
 os.makedirs("models", exist_ok=True)
