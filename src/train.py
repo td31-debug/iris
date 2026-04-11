@@ -4,113 +4,69 @@ from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import joblib
 import os
-import json
 import sys
 
-# Try to configure MLflow with Azure ML workspace
-def setup_mlflow():
-    try:
-        # Check if running on Azure ML (has config.json)
-        if os.path.exists("configs/config.json"):
-            # Try Azure ML connection
-            try:
-                from azure.identity import DefaultAzureCredential
-                from azure.ai.ml import MLClient
-                
-                with open("configs/config.json") as f:
-                    config = json.load(f)
-                
-                ml_client = MLClient(
-                    DefaultAzureCredential(),
-                    config["subscription_id"],
-                    config["resource_group"],
-                    config["workspace_name"]
-                )
-                
-                tracking_uri = ml_client.workspaces.get(
-                    config["workspace_name"]
-                ).mlflow_tracking_uri
-                
-                mlflow.set_tracking_uri(tracking_uri)
-                print(f"✅ Connected to Azure ML MLflow")
-            except Exception as e:
-                print(f"⚠️  Using local MLflow: {type(e).__name__}")
-                mlflow.set_tracking_uri("./mlruns")
-        else:
-            mlflow.set_tracking_uri("./mlruns")
-            
-    except Exception as e:
-        print(f"⚠️  Error setting up MLflow: {str(e)[:100]}")
-        mlflow.set_tracking_uri("./mlruns")
+# ── MLflow setup ──────────────────────────────────────────
+os.environ.pop("MLFLOW_RUN_ID", None)  # clear any stale Azure-injected run ID
 
-# Configure MLflow
-setup_mlflow()
+tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "./mlruns")
+mlflow.set_tracking_uri(tracking_uri)
 mlflow.set_experiment("iris-training")
+print(f"📍 MLflow tracking: {tracking_uri}")
 
-# Clear any stale run ID Azure might have injected
-os.environ.pop("MLFLOW_RUN_ID", None)
-
-# Note: Disabled autolog due to NumPy 2.x compatibility issues
-# Using manual metric logging instead (more reliable)
-
-# Create models directory
-os.makedirs("models", exist_ok=True)
-
-# Load data
+# ── Data ──────────────────────────────────────────────────
 data = load_iris()
 X_train, X_test, y_train, y_test = train_test_split(
     data.data, data.target, test_size=0.2, random_state=42
 )
 
-# Explicitly start a fresh run
+# ── Training ──────────────────────────────────────────────
+os.makedirs("models", exist_ok=True)
+
 with mlflow.start_run():
-    # Log parameters
-    mlflow.log_params({
-        "n_estimators": 100,
-        "test_size": 0.2,
-        "random_state": 42
-    })
-    
-    # Train model
-    model = RandomForestClassifier(random_state=42)
+    params = {"n_estimators": 100, "test_size": 0.2, "random_state": 42}
+    mlflow.log_params(params)
+
+    model = RandomForestClassifier(
+        n_estimators=params["n_estimators"],
+        random_state=params["random_state"]
+    )
     model.fit(X_train, y_train)
-    
-    # Calculate metrics
+
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-    recall = recall_score(y_test, y_pred, average="weighted", zero_division=0)
-    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
-    
-    # Log all metrics to Azure ML
-    mlflow.log_metric("accuracy", float(accuracy))
-    mlflow.log_metric("precision", float(precision))
-    mlflow.log_metric("recall", float(recall))
-    mlflow.log_metric("f1_score", float(f1))
-    
-    # Save and log model
-    model_path = "models/model.pkl"
-    joblib.dump(model, model_path)
-    
-    # Only log model to MLflow if tracking URI is set and accessible
+    metrics = {
+        "accuracy":  float(accuracy_score(y_test, y_pred)),
+        "precision": float(precision_score(y_test, y_pred, average="weighted", zero_division=0)),
+        "recall":    float(recall_score(y_test, y_pred, average="weighted", zero_division=0)),
+        "f1_score":  float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
+    }
+    mlflow.log_metrics(metrics)
+
+    # Save model
     try:
-        mlflow.sklearn.log_model(model, "iris-model")
-        mlflow.log_artifact(model_path, "models")
+        import joblib
+        model_path = "models/model.pkl"
+        joblib.dump(model, model_path)
+        mlflow.log_artifact(model_path)
+    except ImportError:
+        pass
+
+    # Log model to MLflow registry
+    try:
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="iris-model",
+            registered_model_name="iris-rf-classifier"
+        )
     except Exception as e:
-        print(f"⚠️  Skipping MLflow model logging: {type(e).__name__}")
-        print("   (Model still saved locally at models/model.pkl)")
-    
+        print(f"⚠️  Model registry skipped: {type(e).__name__}")
+
+    # ── Output ────────────────────────────────────────────
     print("\n" + "="*60)
     print("✅ TRAINING COMPLETE")
     print("="*60)
-    print(f"Accuracy:  {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall:    {recall:.4f}")
-    print(f"F1-Score:  {f1:.4f}")
-    print("="*60 + "\n")
-    
-    # Flush outputs
+    for k, v in metrics.items():
+        print(f"{k.capitalize():<12}: {v:.4f}")
+    print("="*60)
     sys.stdout.flush()
-    sys.stderr.flush()

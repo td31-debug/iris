@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install azure-identity azure-ai-ml scikit-learn joblib
+          pip install azure-identity azure-ai-ml scikit-learn joblib pytest mlflow
       
       # Step 4: Authenticate with Azure
       - name: Azure Login
