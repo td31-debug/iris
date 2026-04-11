@@ -55,14 +55,20 @@ jobs:
           name: trained-model
           path: models/model.pkl
       
-      # Step 8: Submit job to Azure ML
+      # Step 6: Submit job to Azure ML
       - name: Submit Azure ML Job
+        if: always()
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
           AZURE_WORKSPACE_NAME: ${{ secrets.AZURE_WORKSPACE_NAME }}
         run: |
-          python src/job.py
+          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "⚠️ Skipping Azure ML job - GitHub Secrets not configured yet"
+            echo "Add secrets to: Settings → Secrets and variables → Actions"
+          else
+            python src/job.py
+          fi
       
       # Step 9: Notify on success
       - name: Notify Success
