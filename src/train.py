@@ -1,9 +1,10 @@
 import mlflow
-import mlflow.sklearn
+from mlflow import sklearn as mlflow_sklearn
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import joblib
 import os
 import sys
 
@@ -45,16 +46,15 @@ with mlflow.start_run():
 
     # Save model
     try:
-        import joblib
         model_path = "models/model.pkl"
         joblib.dump(model, model_path)
         mlflow.log_artifact(model_path)
-    except ImportError:
-        pass
+    except Exception as e:
+        print(f"⚠️  Model save skipped: {type(e).__name__}")
 
     # Log model to MLflow registry
     try:
-        mlflow.sklearn.log_model(
+        mlflow_sklearn.log_model(
             sk_model=model,
             artifact_path="iris-model",
             registered_model_name="iris-rf-classifier"
