@@ -14,16 +14,13 @@ ml_client = MLClient(
     config["workspace_name"]
 )
 
-# Define job with environment variables for MLflow tracking
+# Define job - install deps first, then run training
 job = command(
     code=".",  # project folder
-    command="python src/train.py",
+    command="pip install azure-identity azure-ai-ml mlflow -q && python src/train.py",
     environment="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu:1",
-    compute="cpi-cluster",  # change if needed
-    display_name="iris-training-job",
-    environment_variables={
-        "MLFLOW_TRACKING_URI": "${MLFLOW_TRACKING_URI}",  # Azure ML sets this automatically
-    }
+    compute="cpi-cluster",
+    display_name="iris-training-job"
 )
 
 # Submit job

@@ -7,40 +7,51 @@ from sklearn.metrics import accuracy_score
 import joblib
 import os
 import json
-from azure.identity import DefaultAzureCredential
-from azure.ai.ml import MLClient
 
 # Try to configure MLflow with Azure ML workspace
 def setup_mlflow():
     try:
-        # Load config
-        with open("configs/config.json") as f:
-            config = json.load(f)
-        
-        # Authenticate with Azure
-        ml_client = MLClient(
-            DefaultAzureCredential(),
-            config["subscription_id"],
-            config["resource_group"],
-            config["workspace_name"]
-        )
-        
-        # Get MLflow tracking URI from Azure ML
-        tracking_uri = ml_client.workspaces.get(
-            config["workspace_name"]
-        ).mlflow_tracking_uri
-        
-        mlflow.set_tracking_uri(tracking_uri)
-        print(f"✅ Connected to Azure ML MLflow: {tracking_uri}")
-        
+        # Check if running on Azure ML (has config.json)
+        if os.path.exists("configs/config.json"):
+            # Try Azure ML connection (won't work in local sklearn env, but OK to fail)
+            try:
+                from azure.identity import DefaultAzureCredential
+                from azure.ai.ml import MLClient
+                
+                with open("configs/config.json") as f:
+                    config = json.load(f)
+                
+                ml_client = MLClient(
+                    DefaultAzureCredential(),
+                    config["subscription_id"],
+                    config["resource_group"],
+                    config["workspace_name"]
+                )
+                
+                tracking_uri = ml_client.workspaces.get(
+                    config["workspace_name"]
+                ).mlflow_tracking_uri
+                
+                mlflow.set_tracking_uri(tracking_uri)
+                print(f"✅ Connected to Azure ML MLflow")
+            except Exception as e:
+                print(f"⚠️  Using local MLflow: {type(e).__name__}")
+                mlflow.set_tracking_uri("./mlruns")
+        else:
+            mlflow.set_tracking_uri("./mlruns")
+            
     except Exception as e:
-        print(f"⚠️  Using local MLflow (Azure not available): {str(e)[:100]}")
+        print(f"⚠️  Error setting up MLflow: {str(e)[:100]}")
         mlflow.set_tracking_uri("./mlruns")
 
 # Configure MLflow
 setup_mlflow()
 mlflow.set_experiment("iris-training")
-mlflow.autolog(disable_for_unsupported_versions=True)
+
+try:
+    mlflow.autolog(disable_for_unsupported_versions=True)
+except:
+    print("⚠️  Autolog not available, will log manually")
 
 # Create models directory
 os.makedirs("models", exist_ok=True)
