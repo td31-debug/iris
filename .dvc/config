@@ -1,0 +1,5 @@
+[core]
+    remote = azureblob
+['remote "azureblob"']
+    url = azure://dvc-store/iris-project
+    account_name = mlops15793611856

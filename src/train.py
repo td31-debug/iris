@@ -11,7 +11,8 @@ import sys
 # ── MLflow setup ──────────────────────────────────────────
 os.environ.pop("MLFLOW_RUN_ID", None)  # clear any stale Azure-injected run ID
 
-tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "./mlruns")
+AZURE_MLFLOW_URI = "azureml://eastus.api.azureml.ms/mlflow/v1.0/subscriptions/e15f29d3-c062-4c3d-9461-1a6f661d278f/resourceGroups/ml-project-rg/providers/Microsoft.MachineLearningServices/workspaces/MLOPS"
+tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", AZURE_MLFLOW_URI)
 mlflow.set_tracking_uri(tracking_uri)
 mlflow.set_experiment("iris-training")
 print(f"📍 MLflow tracking: {tracking_uri}")
