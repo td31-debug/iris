@@ -38,6 +38,8 @@ jobs:
         continue-on-error: true
       
       - name: Test training script locally
+        env:
+          MLFLOW_TRACKING_URI: ./mlruns
         run: |
           python src/train.py
       

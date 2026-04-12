@@ -34,6 +34,7 @@ jobs:
       
       # Step 4: Authenticate with Azure
       - name: Azure Login
+        id: azure_login
         uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -46,6 +47,8 @@ jobs:
       
       # Step 6: Train locally (optional - for quick validation)
       - name: Train model locally
+        env:
+          MLFLOW_TRACKING_URI: ./mlruns
         run: |
           set -e
           python src/train.py
@@ -62,7 +65,7 @@ jobs:
       
       # Step 6: Submit job to Azure ML
       - name: Submit Azure ML Job
-        if: always()
+        if: always() && steps.azure_login.outcome == 'success'
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
