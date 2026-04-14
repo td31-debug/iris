@@ -271,7 +271,7 @@ PY
                                 bat '''
                                     @echo off
                                     if defined GOOGLE_APPLICATION_CREDENTIALS if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
-                                    call "%VENV_DIR%\Scripts\activate.bat"
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
                                     python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
                                 '''
                             }
