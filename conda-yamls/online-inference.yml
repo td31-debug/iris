@@ -1,0 +1,12 @@
+name: iris-online-inference
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - azureml-defaults
+    - joblib==1.4.2
+    - numpy==1.26.4
+    - scikit-learn==1.5.1

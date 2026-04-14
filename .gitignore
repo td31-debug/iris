@@ -1,3 +1,6 @@
+# GCP Credentials - NEVER COMMIT
+gcp-key.json
+
 # Python & ML artifacts
 __pycache__/
 *.py[cod]

@@ -1,3 +1,8 @@
+"""
+TensorFlow/Keras Training Script for Vertex AI
+Trains a neural network classifier on Iris dataset
+"""
+
 from google.cloud import aiplatform
 from google.auth import default as google_auth_default
 import os
@@ -24,12 +29,18 @@ aiplatform.init(
 )
 print(f"✅ Vertex AI initialized — project: {PROJECT_ID}")
 
-# Define and submit a real Vertex AI CustomJob from the local training script
+# Define and submit a real Vertex AI CustomJob from the local TensorFlow script
 job = aiplatform.CustomJob.from_local_script(
-    display_name="iris-training-jenkins",
-    script_path="src/train.py",
-    container_uri="us-docker.pkg.dev/vertex-ai/training/sklearn-cpu.1-6:latest",
-    requirements=["scikit-learn==1.3.2", "mlflow", "joblib"],
+    display_name="iris-training-tensorflow",
+    script_path="src/train_tensorflow.py",
+    container_uri="us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-17.py310:latest",
+    requirements=[
+        "tensorflow>=2.12.0",
+        "scikit-learn>=1.3.0",
+        "pandas>=1.5.0",
+        "numpy>=1.24.0",
+        "mlflow>=2.0.0"
+    ],
     replica_count=1,
     machine_type="n1-standard-4",
     staging_bucket=BUCKET,
@@ -38,8 +49,9 @@ job = aiplatform.CustomJob.from_local_script(
     credentials=credentials,
 )
 
-print("📤 Submitting training job to Vertex AI...")
+print("📤 Submitting TensorFlow training job to Vertex AI...")
 job.submit()
 
-print("✅ Vertex AI training job submitted successfully!")
+print("✅ TensorFlow training job submitted successfully!")
 print(f"🆔 Resource name: {job.resource_name}")
+print(f"📊 Monitor at: https://console.cloud.google.com/vertex-ai/training/custom-jobs?project={PROJECT_ID}")

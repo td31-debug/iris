@@ -12,12 +12,4 @@ Modules:
 __version__ = "0.1.0"
 __author__ = "ML Team"
 
-# Import main modules
-try:
-    from . import train
-    from . import job
-    from . import connect_workspace
-except ImportError:
-    pass
-
-__all__ = ["train", "job", "connect_workspace"]
+__all__ = []
