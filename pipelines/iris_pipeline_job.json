@@ -1,0 +1,13 @@
+{
+  "displayName": "iris-pipeline-run",
+  "templatePath": "pipelines/iris_pipeline_spec.json",
+  "labels": {
+    "project": "iris",
+    "repo": "td31-debug-iris",
+    "pipeline": "vertex-ai"
+  },
+  "runtimeConfig": {
+    "gcsOutputDirectory": "gs://mlops-493014-bucket/pipeline-runs",
+    "parameterValues": {}
+  }
+}

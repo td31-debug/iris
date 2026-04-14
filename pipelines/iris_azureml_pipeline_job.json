@@ -1,0 +1,21 @@
+{
+  "description": "Azure ML pipeline for Iris training",
+  "display_name": "iris-azureml-pipeline",
+  "type": "pipeline",
+  "jobs": {
+    "train_iris_component": {
+      "environment": "azureml:AzureML-sklearn-1.0-ubuntu20.04-py38-cpu:1",
+      "component": {
+        "command": "python src/train.py",
+        "code": ".",
+        "environment": "azureml:AzureML-sklearn-1.0-ubuntu20.04-py38-cpu:1",
+        "name": "train_iris_component",
+        "display_name": "train_iris_component",
+        "is_deterministic": true,
+        "type": "command"
+      },
+      "type": "command",
+      "compute": "azureml:cpi-cluster"
+    }
+  }
+}

@@ -1,9 +1,8 @@
 """
 Vertex AI Pipelines - Multi-step ML Orchestration
-Compiles pipeline YAML for Vertex AI workflow submission
+Compiles pipeline specs for Vertex AI workflow submission
 """
 
-from kfp import dsl
 from kfp.v2 import compiler
 from kfp.v2.dsl import (
     component,
@@ -15,17 +14,12 @@ from kfp.v2.dsl import (
     Artifact,
     ClassificationMetrics
 )
-from google.cloud import aiplatform
-from google.auth import default as google_auth_default
+from pathlib import Path
 
 PROJECT_ID = "mlops-493014"
 REGION = "us-central1"
 GCS_BUCKET = f"gs://{PROJECT_ID}-bucket"
-PIPELINE_PATH = f"{GCS_BUCKET}/pipelines"
-
-# Load credentials
-credentials, project = google_auth_default()
-aiplatform.init(project=PROJECT_ID, location=REGION, credentials=credentials)
+PIPELINE_PATH = Path(__file__).resolve().parent.parent / "pipelines"
 
 # ===== Pipeline Components =====
 
@@ -177,33 +171,42 @@ def iris_training_pipeline():
 
 # ===== Compilation & Execution =====
 
-def compile_pipeline():
-    """Compile pipeline to YAML"""
-    pipeline_yaml_path = f"{PIPELINE_PATH.replace('gs://', '')}/iris-pipeline.yaml"
-    
+def compile_pipeline(package_path=None):
+    """Compile pipeline to a local JSON or YAML spec file."""
+    PIPELINE_PATH.mkdir(parents=True, exist_ok=True)
+    output_path = Path(package_path) if package_path else PIPELINE_PATH / "iris_pipeline_spec.json"
+
     compiler.Compiler().compile(
         pipeline_func=iris_training_pipeline,
-        package_path=pipeline_yaml_path
+        package_path=str(output_path)
     )
-    
-    print(f"✅ Pipeline compiled: {pipeline_yaml_path}")
-    return pipeline_yaml_path
 
-def submit_pipeline(pipeline_yaml_path, run_name="iris-pipeline-run"):
-    """Submit pipeline to Vertex AI Pipelines"""
+    print(f"✅ Pipeline compiled: {output_path}")
+    return str(output_path)
+
+
+def submit_pipeline(pipeline_path, run_name="iris-pipeline-run", pipeline_root=None):
+    """Submit pipeline to Vertex AI Pipelines."""
+    from google.auth import default as google_auth_default
+    from google.cloud import aiplatform
+
+    credentials, _ = google_auth_default()
+    aiplatform.init(project=PROJECT_ID, location=REGION, credentials=credentials)
+
     print(f"\n🚀 Submitting pipeline to Vertex AI...")
-    
+
     job = aiplatform.PipelineJob(
         display_name=run_name,
-        template_path=pipeline_yaml_path,
+        template_path=pipeline_path,
+        pipeline_root=pipeline_root or f"{GCS_BUCKET}/pipeline-runs",
         project=PROJECT_ID,
         location=REGION
     )
-    
+
     job.submit()
     print(f"✅ Pipeline submitted!")
     print(f"   Job ID: {job.resource_name}")
-    
+
     return job
 
 if __name__ == "__main__":
@@ -212,10 +215,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Vertex AI ML Pipeline")
     parser.add_argument("--action", choices=["compile", "submit"], default="compile",
                        help="Action to perform")
+    parser.add_argument("--package-path", default=None, help="Output path for compiled pipeline spec")
+    parser.add_argument("--run-name", default="iris-pipeline-run", help="Vertex AI pipeline run name")
+    parser.add_argument("--pipeline-root", default=None, help="Pipeline root for Vertex AI runs")
     args = parser.parse_args()
     
     if args.action == "compile":
-        compile_pipeline()
+        compile_pipeline(package_path=args.package_path)
     elif args.action == "submit":
-        yaml_path = compile_pipeline()
-        submit_pipeline(yaml_path)
+        spec_path = compile_pipeline(package_path=args.package_path)
+        submit_pipeline(spec_path, run_name=args.run_name, pipeline_root=args.pipeline_root)

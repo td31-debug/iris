@@ -1,0 +1,268 @@
+{
+  "components": {
+    "comp-deploy": {
+      "executorLabel": "exec-deploy",
+      "inputDefinitions": {
+        "artifacts": {
+          "input_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-evaluate-model": {
+      "executorLabel": "exec-evaluate-model",
+      "inputDefinitions": {
+        "artifacts": {
+          "input_dataset": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "input_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "metrics": {
+            "artifactType": {
+              "schemaTitle": "system.ClassificationMetrics",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-prepare-data": {
+      "executorLabel": "exec-prepare-data",
+      "outputDefinitions": {
+        "artifacts": {
+          "output_dataset": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-train-model": {
+      "executorLabel": "exec-train-model",
+      "inputDefinitions": {
+        "artifacts": {
+          "input_dataset": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "output_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "deploymentSpec": {
+    "executors": {
+      "exec-deploy": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "deploy"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-aiplatform'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef deploy(\n    input_model: Input[Model]\n):\n    \"\"\"Deploy model to Vertex AI Endpoint\"\"\"\n    from google.cloud import aiplatform\n\n    print(f\"\ud83d\udce4 Registering model for deployment...\")\n    print(f\"   Model path: {input_model.path}\")\n    print(f\"   Ready for deployment to Vertex AI endpoints\")\n\n"
+          ],
+          "image": "python:3.10"
+        }
+      },
+      "exec-evaluate-model": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "evaluate_model"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-storage' 'scikit-learn' 'pandas' 'numpy'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef evaluate_model(\n    input_model: Input[Model],\n    input_dataset: Input[Dataset],\n    metrics: Output[ClassificationMetrics]\n):\n    \"\"\"Evaluate model performance\"\"\"\n    import pickle\n    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix\n    import pandas as pd\n    import json\n\n    # Load model and data\n    with open(input_model.path, 'rb') as f:\n        model = pickle.load(f)\n\n    df = pd.read_csv(input_dataset.path)\n    X = df.iloc[:, :-1].values\n    y = df.iloc[:, -1].values\n\n    # Evaluate\n    y_pred = model.predict(X)\n\n    accuracy = accuracy_score(y, y_pred)\n    precision = precision_score(y, y_pred, average='weighted')\n    recall = recall_score(y, y_pred, average='weighted')\n    f1 = f1_score(y, y_pred, average='weighted')\n\n    # Log metrics\n    metrics.log_confusion_matrix(\n        categories=['Setosa', 'Versicolor', 'Virginica'],\n        matrix=confusion_matrix(y, y_pred).tolist()\n    )\n\n    print(f\"\u2705 Model Evaluation:\")\n    print(f\"   Accuracy: {accuracy:.4f}\")\n    print(f\"   Precision: {precision:.4f}\")\n    print(f\"   Recall: {recall:.4f}\")\n    print(f\"   F1-Score: {f1:.4f}\")\n\n"
+          ],
+          "image": "python:3.10"
+        }
+      },
+      "exec-prepare-data": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "prepare_data"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-storage' 'scikit-learn' 'pandas' 'numpy'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef prepare_data(\n    output_dataset: Output[Dataset]\n):\n    \"\"\"Prepare and preprocess Iris dataset\"\"\"\n    from sklearn.datasets import load_iris\n    from sklearn.preprocessing import StandardScaler\n    from sklearn.model_selection import train_test_split\n    import pandas as pd\n\n    # Load Iris dataset\n    iris = load_iris()\n    X = iris.data\n    y = iris.target\n\n    # Preprocessing\n    scaler = StandardScaler()\n    X_scaled = scaler.fit_transform(X)\n\n    # Train/test split\n    X_train, X_test, y_train, y_test = train_test_split(\n        X_scaled, y, test_size=0.2, random_state=42\n    )\n\n    # Save to dataset output (GCS)\n    df_train = pd.DataFrame(X_train, columns=['f0', 'f1', 'f2', 'f3'])\n    df_train['label'] = y_train\n\n    output_dataset.path = f\"{GCS_BUCKET}/datasets/iris_train.csv\"\n    df_train.to_csv(output_dataset.path, index=False)\n\n"
+          ],
+          "image": "python:3.10"
+        }
+      },
+      "exec-train-model": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "train_model"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-storage' 'scikit-learn' 'pandas' 'numpy' 'mlflow'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_model(\n    input_dataset: Input[Dataset],\n    output_model: Output[Model]\n):\n    \"\"\"Train scikit-learn model\"\"\"\n    import pickle\n    from sklearn.ensemble import RandomForestClassifier\n    from sklearn.metrics import accuracy_score, precision_score, recall_score\n    import pandas as pd\n\n    # Load data\n    df = pd.read_csv(input_dataset.path)\n    X = df.iloc[:, :-1].values\n    y = df.iloc[:, -1].values\n\n    # Train model\n    model = RandomForestClassifier(n_estimators=100, random_state=42)\n    model.fit(X, y)\n\n    # Save model\n    with open(output_model.path, 'wb') as f:\n        pickle.dump(model, f)\n\n"
+          ],
+          "image": "python:3.10"
+        }
+      }
+    }
+  },
+  "pipelineInfo": {
+    "description": "End-to-end ML pipeline: prepare data \u2192 train \u2192 evaluate \u2192 deploy",
+    "name": "iris-training-pipeline"
+  },
+  "root": {
+    "dag": {
+      "tasks": {
+        "deploy": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-deploy"
+          },
+          "dependentTasks": [
+            "train-model"
+          ],
+          "inputs": {
+            "artifacts": {
+              "input_model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "output_model",
+                  "producerTask": "train-model"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "deploy"
+          }
+        },
+        "evaluate-model": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-evaluate-model"
+          },
+          "dependentTasks": [
+            "prepare-data",
+            "train-model"
+          ],
+          "inputs": {
+            "artifacts": {
+              "input_dataset": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "output_dataset",
+                  "producerTask": "prepare-data"
+                }
+              },
+              "input_model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "output_model",
+                  "producerTask": "train-model"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "evaluate-model"
+          }
+        },
+        "prepare-data": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-prepare-data"
+          },
+          "taskInfo": {
+            "name": "prepare-data"
+          }
+        },
+        "train-model": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-train-model"
+          },
+          "dependentTasks": [
+            "prepare-data"
+          ],
+          "inputs": {
+            "artifacts": {
+              "input_dataset": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "output_dataset",
+                  "producerTask": "prepare-data"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "train-model"
+          }
+        }
+      }
+    }
+  },
+  "schemaVersion": "2.1.0",
+  "sdkVersion": "kfp-2.16.0"
+}
