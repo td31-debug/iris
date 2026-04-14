@@ -74,7 +74,7 @@ pipeline {
                             @echo off
                             if exist "%VENV_DIR%" rmdir /s /q "%VENV_DIR%"
                             python -m venv "%VENV_DIR%"
-                            call "%VENV_DIR%\Scripts\activate.bat"
+                            call "%VENV_DIR%\\Scripts\\activate.bat"
                             python -m pip install --upgrade pip
                             pip install -r requirements.txt
                         '''
@@ -106,7 +106,7 @@ PY
                         } else {
                             bat '''
                                 @echo off
-                                call "%VENV_DIR%\Scripts\activate.bat"
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
                                 python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
                             '''
                         }
@@ -128,8 +128,8 @@ PY
                     } else {
                         bat '''
                             @echo off
-                            call "%VENV_DIR%\Scripts\activate.bat"
-                            python -m pytest tests\ -v
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
+                                python -m pytest tests\\ -v
                         '''
                     }
                 }
@@ -150,10 +150,10 @@ PY
                     } else {
                         bat '''
                             @echo off
-                            call "%VENV_DIR%\Scripts\activate.bat"
-                            set MLFLOW_TRACKING_URI=.\mlruns
-                            python src\train.py
-                            if not exist models\model.pkl exit /b 1
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
+                                set MLFLOW_TRACKING_URI=.\\mlruns
+                                python src\\train.py
+                                if not exist models\\model.pkl exit /b 1
                         '''
                     }
                 }
@@ -177,7 +177,7 @@ PY
                         } else {
                             bat '''
                                 @echo off
-                                call "%VENV_DIR%\Scripts\activate.bat"
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
                                 python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
                             '''
                         }
@@ -203,8 +203,8 @@ PY
                         } else {
                             bat '''
                                 @echo off
-                                call "%VENV_DIR%\Scripts\activate.bat"
-                                python scripts\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
+                                python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
                             '''
                         }
                     }
@@ -229,8 +229,8 @@ PY
                         } else {
                             bat '''
                                 @echo off
-                                call "%VENV_DIR%\Scripts\activate.bat"
-                                python scripts\monitor_training.py --list --limit 10
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
+                                python scripts\\monitor_training.py --list --limit 10
                             '''
                         }
                     }
@@ -258,8 +258,8 @@ PY
                         } else {
                             bat '''
                                 @echo off
-                                call "%VENV_DIR%\Scripts\activate.bat"
-                                python scripts\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
+                                call "%VENV_DIR%\\Scripts\\activate.bat"
+                                python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
                             '''
                         }
                     }
