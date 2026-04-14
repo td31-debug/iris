@@ -71,7 +71,7 @@ jobs:
       - name: Verify Azure ML workspace
         id: verify_workspace
         if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success'
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           inlineScript: |
             az extension remove -n azure-cli-ml || true
