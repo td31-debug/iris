@@ -66,25 +66,31 @@ PY
     )
 }
 
-def withResolvedGcpAuth(scriptContext, Closure body) {
-    def authMode = scriptContext.env.GCP_AUTH_MODE ?: ''
-    if (authMode == 'file') {
-        scriptContext.withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${scriptContext.env.GCP_AUTH_PATH}"]) {
+def withDetectedGcpAuth(scriptContext, Closure body) {
+    def credentialFile = resolveGcpCredentialFile(scriptContext)
+    if (credentialFile) {
+        scriptContext.echo("Using GCP credential file at ${credentialFile}")
+        scriptContext.withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${credentialFile}"]) {
             body()
         }
         return
     }
-    if (authMode == 'ambient') {
+    if (runGoogleAuthProbe(scriptContext) == 0) {
+        scriptContext.echo('Using ambient Google Application Default Credentials from the Jenkins agent.')
         body()
         return
     }
-    if (authMode == 'jenkins-credential') {
-        scriptContext.withCredentials([file(credentialsId: scriptContext.params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-            body()
+    if (scriptContext.params.GCP_CREDENTIALS_ID?.trim()) {
+        try {
+            scriptContext.withCredentials([file(credentialsId: scriptContext.params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                body()
+            }
+            return
+        } catch (Exception ex) {
+            scriptContext.error("No usable GCP credentials were found. Checked GCP_KEY_FILE, GOOGLE_APPLICATION_CREDENTIALS, workspace gcp-key.json, common gcloud ADC locations, and Jenkins credential ID '${scriptContext.params.GCP_CREDENTIALS_ID}'. Either set GCP_KEY_FILE to a real JSON path on the Jenkins agent, configure that Jenkins file credential, or configure ADC for the Jenkins service account. Original error: ${ex.message}")
         }
-        return
     }
-    scriptContext.error('GCP authentication was not initialized. The Validate Credentials stage must run before any cloud stage.')
+    scriptContext.error('No usable GCP credentials were found. Set GCP_KEY_FILE to a real JSON path on the Jenkins agent, configure GOOGLE_APPLICATION_CREDENTIALS, configure gcloud ADC for the Jenkins service account, or provide a Jenkins file credential ID.')
 }
 
 pipeline {
@@ -151,8 +157,6 @@ pipeline {
     environment {
         VENV_DIR = '.venv'
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
-        GCP_AUTH_MODE = ''
-        GCP_AUTH_PATH = ''
     }
 
     stages {
@@ -247,68 +251,30 @@ pipeline {
                         echo 'LOCAL_ONLY=true, so cloud credential validation is intentionally bypassed.'
                     } else {
                         echo '🔐 Validating GCP credentials...'
-                        def credentialFile = resolveGcpCredentialFile(this)
-                        if (credentialFile) {
-                            env.GCP_AUTH_MODE = 'file'
-                            env.GCP_AUTH_PATH = credentialFile
-                            echo "Using GCP credential file at ${credentialFile}"
-                            withResolvedGcpAuth(this) {
-                                if (isUnix()) {
-                                    sh '''
-                                        set -eu
+                        withDetectedGcpAuth(this) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
                                         test -f "$GOOGLE_APPLICATION_CREDENTIALS"
-                                        . "$VENV_DIR/bin/activate"
-                                        python - <<'PY'
+                                    fi
+                                    . "$VENV_DIR/bin/activate"
+                                    python - <<'PY'
 from google.auth import default
 creds, project = default()
 email = getattr(creds, 'service_account_email', 'unknown')
 print(f'Authenticated as: {email}')
 print(f'Project: {project}')
 PY
-                                    '''
-                                } else {
-                                    bat '''
-                                        @echo off
-                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
-                                        call "%VENV_DIR%\\Scripts\\activate.bat"
-                                        python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
-                                    '''
-                                }
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    if defined GOOGLE_APPLICATION_CREDENTIALS if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                    call "%VENV_DIR%\Scripts\activate.bat"
+                                    python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
+                                '''
                             }
-                        } else if (runGoogleAuthProbe(this) == 0) {
-                            env.GCP_AUTH_MODE = 'ambient'
-                            env.GCP_AUTH_PATH = ''
-                            echo 'Using ambient Google Application Default Credentials from the Jenkins agent.'
-                        } else if (params.GCP_CREDENTIALS_ID?.trim()) {
-                            try {
-                                withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                                    env.GCP_AUTH_MODE = 'jenkins-credential'
-                                    env.GCP_AUTH_PATH = ''
-                                    if (isUnix()) {
-                                        sh '''
-                                            set -eu
-                                            . "$VENV_DIR/bin/activate"
-                                            python - <<'PY'
-from google.auth import default
-creds, project = default()
-email = getattr(creds, 'service_account_email', 'unknown')
-print(f'Authenticated as: {email}')
-print(f'Project: {project}')
-PY
-                                        '''
-                                    } else {
-                                        bat '''
-                                            @echo off
-                                            call "%VENV_DIR%\\Scripts\\activate.bat"
-                                            python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
-                                        '''
-                                    }
-                                }
-                            } catch (Exception ex) {
-                                error("No usable GCP credentials were found. Checked GCP_KEY_FILE, GOOGLE_APPLICATION_CREDENTIALS, workspace gcp-key.json, common gcloud ADC locations, and Jenkins credential ID '${params.GCP_CREDENTIALS_ID}'. Either set GCP_KEY_FILE to a real JSON path on the Jenkins agent, configure that Jenkins file credential, or configure ADC for the Jenkins service account. Original error: ${ex.message}")
-                            }
-                        } else {
-                            error('No usable GCP credentials were found. Set GCP_KEY_FILE to a real JSON path on the Jenkins agent, configure GOOGLE_APPLICATION_CREDENTIALS, configure gcloud ADC for the Jenkins service account, or provide a Jenkins file credential ID.')
                         }
                     }
                 }
@@ -369,7 +335,7 @@ PY
                         echo 'Existing VERTEX_PIPELINE_RUN provided, so new training submission is skipped by design.'
                     } else {
                         echo "🤖 Submitting ${params.FRAMEWORK} training workflow..."
-                        withResolvedGcpAuth(this) {
+                        withDetectedGcpAuth(this) {
                             if (isUnix()) {
                                 sh '''
                                     set -eu
@@ -396,7 +362,7 @@ PY
                         echo 'LOCAL_ONLY=true, so existing Vertex pipeline inspection is bypassed.'
                     } else if (params.VERTEX_PIPELINE_RUN?.trim()) {
                         echo '🔎 Inspecting existing Vertex pipeline run...'
-                        withResolvedGcpAuth(this) {
+                        withDetectedGcpAuth(this) {
                             if (isUnix()) {
                                 sh '''
                                     set -eu
@@ -427,7 +393,7 @@ PY
                         echo 'MONITOR_JOBS=false, so recent Vertex AI jobs will not be listed.'
                     } else {
                         echo '📋 Listing recent Vertex AI jobs...'
-                        withResolvedGcpAuth(this) {
+                        withDetectedGcpAuth(this) {
                             if (isUnix()) {
                                 sh '''
                                     set -eu
@@ -460,7 +426,7 @@ PY
                         echo 'DEPLOY_MODEL=true but MODEL_ARTIFACT_PATH is empty. Provide a gs:// model artifact path to enable deployment.'
                     } else {
                         echo '🚀 Registering the provided model artifact...'
-                        withResolvedGcpAuth(this) {
+                        withDetectedGcpAuth(this) {
                             if (isUnix()) {
                                 sh '''
                                     set -eu
