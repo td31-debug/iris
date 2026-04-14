@@ -10,9 +10,9 @@ permissions:
 # Trigger conditions
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, releases/** ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, releases/** ]
   schedule:
     # Run every Sunday at 2 AM UTC
     - cron: '0 2 * * 0'

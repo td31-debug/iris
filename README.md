@@ -150,6 +150,33 @@ iris-ml-pipeline/
 2. Add 4 secrets (see [.github/GITHUB_ACTIONS_SETUP.md](.github/GITHUB_ACTIONS_SETUP.md))
 3. Push code → Workflows run automatically
 
+### Example Workflow
+
+```yaml
+name: Example Azure ML Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest tests/ -v
+          MLFLOW_TRACKING_URI=./mlruns python src/train.py
+```
+
+### Contribution Guidelines
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the expected development flow, local validation commands, pull request requirements, and release branch/tag conventions.
+
 ---
 
 ## 📊 Monitoring
@@ -250,6 +277,7 @@ mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
 - [MLflow Guide](docs/MLFLOW_GUIDE.md)
 - [GitHub Actions Setup](github/GITHUB_ACTIONS_SETUP.md)
+- [Contributing Guide](CONTRIBUTING.md)
 - [Azure ML Docs](https://learn.microsoft.com/en-us/azure/machine-learning)
 
 ---
