@@ -1,6 +1,6 @@
 azure-identity==1.16.0
 azure-ai-ml==1.15.0
-scikit-learn==1.5.1
+scikit-learn==1.8.0
 joblib==1.4.2
 numpy==1.26.4
 fastapi==0.115.0
