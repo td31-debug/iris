@@ -61,7 +61,7 @@ PY
         script: '''
             @echo off
             call "%VENV_DIR%\\Scripts\\activate.bat"
-            python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+            python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
         '''
     )
 }
@@ -271,7 +271,7 @@ PY
                                         @echo off
                                         if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
                                         call "%VENV_DIR%\\Scripts\\activate.bat"
-                                        python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                        python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
                                     '''
                                 }
                             }
@@ -300,7 +300,7 @@ PY
                                         bat '''
                                             @echo off
                                             call "%VENV_DIR%\\Scripts\\activate.bat"
-                                            python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                            python -c "from google.auth import default; creds, project = default(); email = getattr(creds, 'service_account_email', 'unknown'); print('Authenticated as: {}'.format(email)); print('Project: {}'.format(project))"
                                         '''
                                     }
                                 }
