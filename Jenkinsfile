@@ -42,6 +42,11 @@ pipeline {
             defaultValue: '',
             description: 'Optional Vertex pipeline console URL, resource name, or run id to inspect instead of submitting a new training job'
         )
+        string(
+            name: 'PYTHON_CMD',
+            defaultValue: '',
+            description: 'Optional Python command for Jenkins agents, for example py -3.10, python, or a full path to python.exe'
+        )
     }
 
     environment {
@@ -72,8 +77,21 @@ pipeline {
                     } else {
                         bat '''
                             @echo off
+                            set "PYTHON_TO_USE=%PYTHON_CMD%"
+                            if not defined PYTHON_TO_USE (
+                                where py >nul 2>nul && set "PYTHON_TO_USE=py -3.10"
+                            )
+                            if not defined PYTHON_TO_USE (
+                                where python >nul 2>nul && set "PYTHON_TO_USE=python"
+                            )
+                            if not defined PYTHON_TO_USE (
+                                echo ERROR: Python was not found for the Jenkins service account.
+                                echo Set the PYTHON_CMD build parameter to py, python, or the full path to python.exe.
+                                exit /b 1
+                            )
+                            echo Using Python command: %PYTHON_TO_USE%
                             if exist "%VENV_DIR%" rmdir /s /q "%VENV_DIR%"
-                            python -m venv "%VENV_DIR%"
+                            %PYTHON_TO_USE% -m venv "%VENV_DIR%"
                             call "%VENV_DIR%\\Scripts\\activate.bat"
                             python -m pip install --upgrade pip
                             pip install -r requirements.txt
