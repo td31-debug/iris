@@ -15,7 +15,7 @@ AZURE_MLFLOW_URI = "azureml://eastus.api.azureml.ms/mlflow/v1.0/subscriptions/e1
 tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", AZURE_MLFLOW_URI)
 mlflow.set_tracking_uri(tracking_uri)
 mlflow.set_experiment("iris-training")
-print(f"📍 MLflow tracking: {tracking_uri}")
+print(f"MLflow tracking: {tracking_uri}")
 
 # ── Data ──────────────────────────────────────────────────
 data = load_iris()
@@ -51,7 +51,7 @@ with mlflow.start_run():
         joblib.dump(model, model_path)
         mlflow.log_artifact(model_path)
     except Exception as e:
-        print(f"⚠️  Model save skipped: {type(e).__name__}")
+        print(f"Model save skipped: {type(e).__name__}")
 
     # Log model to MLflow registry
     try:
@@ -61,11 +61,11 @@ with mlflow.start_run():
             registered_model_name="iris-rf-classifier"
         )
     except Exception as e:
-        print(f"⚠️  Model registry skipped: {type(e).__name__}")
+        print(f"Model registry skipped: {type(e).__name__}")
 
     # ── Output ────────────────────────────────────────────
     print("\n" + "="*60)
-    print("✅ TRAINING COMPLETE")
+    print("TRAINING COMPLETE")
     print("="*60)
     for k, v in metrics.items():
         print(f"{k.capitalize():<12}: {v:.4f}")

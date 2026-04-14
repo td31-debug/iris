@@ -31,6 +31,7 @@ def prepare_data(
     output_dataset: Output[Dataset]
 ):
     """Prepare and preprocess Iris dataset"""
+    from pathlib import Path
     from sklearn.datasets import load_iris
     from sklearn.preprocessing import StandardScaler
     from sklearn.model_selection import train_test_split
@@ -50,11 +51,11 @@ def prepare_data(
         X_scaled, y, test_size=0.2, random_state=42
     )
     
-    # Save to dataset output (GCS)
+    # Persist to the artifact path injected by KFP for this dataset output.
     df_train = pd.DataFrame(X_train, columns=['f0', 'f1', 'f2', 'f3'])
     df_train['label'] = y_train
-    
-    output_dataset.path = f"{GCS_BUCKET}/datasets/iris_train.csv"
+
+    Path(output_dataset.path).parent.mkdir(parents=True, exist_ok=True)
     df_train.to_csv(output_dataset.path, index=False)
 
 @component(
