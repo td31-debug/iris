@@ -106,7 +106,7 @@ def list_training_jobs(limit=5):
 
 def show_summary(results):
     """Show a short summary of the supported workflows."""
-        print(f"\n{Colors.BLUE}=== MLOPS PIPELINE SUMMARY ==={Colors.END}\n")
+    print(f"\n{Colors.BLUE}=== MLOPS PIPELINE SUMMARY ==={Colors.END}\n")
 
     print(
         f"""
@@ -131,9 +131,9 @@ def show_summary(results):
 """
     )
 
-        print(f"{Colors.BLUE}=== TEST RESULTS ==={Colors.END}")
+    print(f"{Colors.BLUE}=== TEST RESULTS ==={Colors.END}")
     for framework, status in results.items():
-                status_text = f"{Colors.GREEN}PASS{Colors.END}" if status else f"{Colors.RED}FAIL{Colors.END}"
+        status_text = f"{Colors.GREEN}PASS{Colors.END}" if status else f"{Colors.RED}FAIL{Colors.END}"
         print(f"  {framework.upper()}: {status_text}")
 
     passed = sum(1 for value in results.values() if value)
