@@ -78,15 +78,25 @@ pipeline {
                         bat '''
                             @echo off
                             set "PYTHON_TO_USE=%PYTHON_CMD%"
+                            if defined PYTHON_TO_USE (
+                                call %PYTHON_TO_USE% --version >nul 2>nul || set "PYTHON_TO_USE="
+                            )
                             if not defined PYTHON_TO_USE (
                                 where py >nul 2>nul && set "PYTHON_TO_USE=py -3.10"
                             )
                             if not defined PYTHON_TO_USE (
                                 where python >nul 2>nul && set "PYTHON_TO_USE=python"
                             )
+                            if not defined PYTHON_TO_USE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PYTHON_TO_USE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+                            if not defined PYTHON_TO_USE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PYTHON_TO_USE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+                            if not defined PYTHON_TO_USE if exist "C:\Python310\python.exe" set "PYTHON_TO_USE=C:\Python310\python.exe"
+                            if not defined PYTHON_TO_USE if exist "C:\Python311\python.exe" set "PYTHON_TO_USE=C:\Python311\python.exe"
+                            if not defined PYTHON_TO_USE if exist "%ProgramFiles%\Python310\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\Python310\python.exe"
+                            if not defined PYTHON_TO_USE if exist "%ProgramFiles%\Python311\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\Python311\python.exe"
                             if not defined PYTHON_TO_USE (
                                 echo ERROR: Python was not found for the Jenkins service account.
-                                echo Set the PYTHON_CMD build parameter to py, python, or the full path to python.exe.
+                                echo Set the PYTHON_CMD build parameter to py -3.10, python, or the full path to python.exe.
+                                echo Example: C:\Users\YOURNAME\AppData\Local\Programs\Python\Python310\python.exe
                                 exit /b 1
                             )
                             echo Using Python command: %PYTHON_TO_USE%
