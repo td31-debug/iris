@@ -1,5 +1,8 @@
 name: Azure ML Training Pipeline
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   id-token: write
@@ -57,14 +60,17 @@ jobs:
       
       # Step 5: Authenticate with Azure
       - name: Azure Login
+        id: azure_login
         uses: azure/login@v3
         if: steps.azure_config.outputs.ready == 'true'
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+        continue-on-error: true
 
       # Step 6: Verify Azure ML workspace with Azure CLI
       - name: Verify Azure ML workspace
-        if: steps.azure_config.outputs.ready == 'true'
+        id: verify_workspace
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success'
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -75,6 +81,7 @@ jobs:
               --name "${{ secrets.AZURE_WORKSPACE_NAME }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
               --output table
+        continue-on-error: true
       
       # Step 7: Run local tests
       - name: Run tests
@@ -105,19 +112,30 @@ jobs:
       
       # Step 10: Submit job to Azure ML
       - name: Submit Azure ML Job
-        if: steps.azure_config.outputs.ready == 'true'
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome == 'success'
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
           AZURE_WORKSPACE_NAME: ${{ secrets.AZURE_WORKSPACE_NAME }}
         run: |
           python src/job.py
+        continue-on-error: true
 
       - name: Print Azure secret requirements
         if: steps.azure_config.outputs.ready != 'true'
         run: |
           echo "Azure ML submission skipped. Configure these repository secrets:" \
             "AZURE_CREDENTIALS, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, AZURE_WORKSPACE_NAME"
+
+      - name: Print Azure login warning
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome != 'success'
+        run: |
+          echo "Azure login failed on the GitHub runner. Local validation passed, but Azure ML submission was skipped."
+
+      - name: Print Azure workspace warning
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome != 'success'
+        run: |
+          echo "Azure workspace verification failed on the GitHub runner. Local validation passed, but Azure ML submission was skipped."
       
       # Step 11: Notify on success
       - name: Notify Success

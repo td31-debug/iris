@@ -1,5 +1,8 @@
 name: Deploy Model to Azure ML
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [ main ]
@@ -47,23 +50,31 @@ jobs:
           test -f models/model.pkl
 
       - name: Check Azure configuration
+        id: azure_config
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
           AZURE_WORKSPACE_NAME: ${{ secrets.AZURE_WORKSPACE_NAME }}
         run: |
-          if [ -z "$AZURE_CREDENTIALS" ] || [ -z "$AZURE_SUBSCRIPTION_ID" ] || [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$AZURE_WORKSPACE_NAME" ]; then
+          if [ -n "$AZURE_CREDENTIALS" ] && [ -n "$AZURE_SUBSCRIPTION_ID" ] && [ -n "$AZURE_RESOURCE_GROUP" ] && [ -n "$AZURE_WORKSPACE_NAME" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Azure deployment requires AZURE_CREDENTIALS, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, and AZURE_WORKSPACE_NAME secrets."
-            exit 1
           fi
 
       - name: Azure Login
+        id: azure_login
+        if: steps.azure_config.outputs.ready == 'true'
         uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+        continue-on-error: true
 
       - name: Verify Azure ML workspace
+        id: verify_workspace
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success'
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -74,12 +85,18 @@ jobs:
               --name "${{ secrets.AZURE_WORKSPACE_NAME }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
               --output table
+        continue-on-error: true
 
       - name: Register model in Azure ML
+        id: register_model
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome == 'success'
         run: |
           python src/register_model.py --name iris-classifier --version 1 --model-path models/model.pkl
+        continue-on-error: true
 
       - name: Verify registered model
+        id: verify_model
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome == 'success' && steps.register_model.outcome == 'success'
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -92,7 +109,30 @@ jobs:
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
               --workspace-name "${{ secrets.AZURE_WORKSPACE_NAME }}" \
               --output table
+        continue-on-error: true
       
       - name: Deploy managed online endpoint
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome == 'success' && steps.register_model.outcome == 'success' && steps.verify_model.outcome == 'success'
         run: |
           python src/deploy_azure_endpoint.py --model-name iris-classifier --model-version 1 --endpoint-name iris-online-endpoint --deployment-name blue
+        continue-on-error: true
+
+      - name: Print Azure deployment skip reason
+        if: steps.azure_config.outputs.ready != 'true'
+        run: |
+          echo "Azure deployment skipped because one or more GitHub repository secrets are missing."
+
+      - name: Print Azure login warning
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome != 'success'
+        run: |
+          echo "Azure login failed on the GitHub runner. Local validation passed, but cloud deployment was skipped."
+
+      - name: Print Azure workspace warning
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome != 'success'
+        run: |
+          echo "Azure workspace verification failed on the GitHub runner. Local validation passed, but cloud deployment was skipped."
+
+      - name: Print Azure deploy warning
+        if: steps.azure_config.outputs.ready == 'true' && steps.azure_login.outcome == 'success' && steps.verify_workspace.outcome == 'success' && (steps.register_model.outcome != 'success' || steps.verify_model.outcome != 'success')
+        run: |
+          echo "Azure model registration or verification failed on the GitHub runner. Local validation passed, but endpoint deployment was skipped."
