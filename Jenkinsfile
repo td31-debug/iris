@@ -47,6 +47,16 @@ pipeline {
             defaultValue: '',
             description: 'Optional Python command for Jenkins agents, for example py -3.10, python, or a full path to python.exe'
         )
+        string(
+            name: 'GCP_CREDENTIALS_ID',
+            defaultValue: 'gcp-vertex-sa-key',
+            description: 'Optional Jenkins file credential ID for the GCP service account JSON used by the Vertex pipeline stages'
+        )
+        string(
+            name: 'GCP_KEY_FILE',
+            defaultValue: '',
+            description: 'Optional local path on the Jenkins agent to a GCP service account JSON file. If set, this is used instead of Jenkins credentials.'
+        )
     }
 
     environment {
@@ -70,6 +80,8 @@ pipeline {
                 echo "DEPLOY_MODEL=${params.DEPLOY_MODEL}"
                 echo "VERTEX_PIPELINE_RUN=${params.VERTEX_PIPELINE_RUN ?: '(empty)'}"
                 echo "MODEL_ARTIFACT_PATH=${params.MODEL_ARTIFACT_PATH ?: '(empty)'}"
+                echo "GCP_CREDENTIALS_ID=${params.GCP_CREDENTIALS_ID ?: '(empty)'}"
+                echo "GCP_KEY_FILE=${params.GCP_KEY_FILE ?: '(empty)'}"
             }
         }
 
@@ -144,25 +156,51 @@ pipeline {
                         echo 'LOCAL_ONLY=true, so cloud credential validation is intentionally bypassed.'
                     } else {
                         echo '🔐 Validating GCP credentials...'
-                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    . "$VENV_DIR/bin/activate"
-                                    python - <<'PY'
+                        if (params.GCP_KEY_FILE?.trim()) {
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python - <<'PY'
 from google.auth import default
 creds, project = default()
 email = getattr(creds, 'service_account_email', 'unknown')
 print(f'Authenticated as: {email}')
 print(f'Project: {project}')
 PY
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    call "%VENV_DIR%\\Scripts\\activate.bat"
-                                    python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
-                                '''
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                    '''
+                                }
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        . "$VENV_DIR/bin/activate"
+                                        python - <<'PY'
+from google.auth import default
+creds, project = default()
+email = getattr(creds, 'service_account_email', 'unknown')
+print(f'Authenticated as: {email}')
+print(f'Project: {project}')
+PY
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                    '''
+                                }
                             }
                         }
                     }
@@ -224,19 +262,39 @@ PY
                         echo 'Existing VERTEX_PIPELINE_RUN provided, so new training submission is skipped by design.'
                     } else {
                         echo "🤖 Submitting ${params.FRAMEWORK} training workflow..."
-                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    . "$VENV_DIR/bin/activate"
-                                    python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    call "%VENV_DIR%\\Scripts\\activate.bat"
-                                    python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
-                                '''
+                        if (params.GCP_KEY_FILE?.trim()) {
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
+                                    '''
+                                }
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        . "$VENV_DIR/bin/activate"
+                                        python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
+                                    '''
+                                }
                             }
                         }
                     }
@@ -251,19 +309,39 @@ PY
                         echo 'LOCAL_ONLY=true, so existing Vertex pipeline inspection is bypassed.'
                     } else if (params.VERTEX_PIPELINE_RUN?.trim()) {
                         echo '🔎 Inspecting existing Vertex pipeline run...'
-                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    . "$VENV_DIR/bin/activate"
-                                    python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    call "%VENV_DIR%\\Scripts\\activate.bat"
-                                    python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
-                                '''
+                        if (params.GCP_KEY_FILE?.trim()) {
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
+                                    '''
+                                }
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
+                                    '''
+                                }
                             }
                         }
                     } else {
@@ -282,19 +360,39 @@ PY
                         echo 'MONITOR_JOBS=false, so recent Vertex AI jobs will not be listed.'
                     } else {
                         echo '📋 Listing recent Vertex AI jobs...'
-                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    . "$VENV_DIR/bin/activate"
-                                    python scripts/monitor_training.py --list --limit 10
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    call "%VENV_DIR%\\Scripts\\activate.bat"
-                                    python scripts\\monitor_training.py --list --limit 10
-                                '''
+                        if (params.GCP_KEY_FILE?.trim()) {
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_training.py --list --limit 10
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_training.py --list --limit 10
+                                    '''
+                                }
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_training.py --list --limit 10
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_training.py --list --limit 10
+                                    '''
+                                }
                             }
                         }
                     }
@@ -315,22 +413,45 @@ PY
                         echo 'DEPLOY_MODEL=true but MODEL_ARTIFACT_PATH is empty. Provide a gs:// model artifact path to enable deployment.'
                     } else {
                         echo '🚀 Registering the provided model artifact...'
-                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    . "$VENV_DIR/bin/activate"
-                                    python scripts/deploy_model.py upload \
-                                        --model-path "$MODEL_ARTIFACT_PATH" \
-                                        --framework "$FRAMEWORK" \
-                                        --version "$MODEL_VERSION"
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    call "%VENV_DIR%\\Scripts\\activate.bat"
-                                    python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
-                                '''
+                        if (params.GCP_KEY_FILE?.trim()) {
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/deploy_model.py upload \
+                                            --model-path "$MODEL_ARTIFACT_PATH" \
+                                            --framework "$FRAMEWORK" \
+                                            --version "$MODEL_VERSION"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
+                                    '''
+                                }
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/deploy_model.py upload \
+                                            --model-path "$MODEL_ARTIFACT_PATH" \
+                                            --framework "$FRAMEWORK" \
+                                            --version "$MODEL_VERSION"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
+                                    '''
+                                }
                             }
                         }
                     }
