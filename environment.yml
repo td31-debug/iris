@@ -10,8 +10,13 @@ dependencies:
     - azure-ai-ml==1.15.0
     - scikit-learn==1.5.1
     - joblib==1.4.2
-    - mlflow==2.14.1
+    - numpy==1.26.4
+    - fastapi==0.115.0
+    - uvicorn==0.30.6
+    - mlflow==2.22.4
+    - protobuf>=6.31.1,<7
     - pytest==8.0.0
     - pytest-cov==5.0.0
     - google-cloud-aiplatform>=1.50.0
+    - google-cloud-logging>=3.11.0
     - kfp>=2.8,<3
