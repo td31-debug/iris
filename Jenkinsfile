@@ -77,9 +77,10 @@ pipeline {
                     } else {
                         bat '''
                             @echo off
+                            setlocal EnableDelayedExpansion
                             set "PYTHON_TO_USE=%PYTHON_CMD%"
                             if defined PYTHON_TO_USE (
-                                call %PYTHON_TO_USE% --version >nul 2>nul || set "PYTHON_TO_USE="
+                                call !PYTHON_TO_USE! --version >nul 2>nul || set "PYTHON_TO_USE="
                             )
                             if not defined PYTHON_TO_USE (
                                 where py >nul 2>nul && set "PYTHON_TO_USE=py -3.10"
@@ -95,16 +96,17 @@ pipeline {
                             if not defined PYTHON_TO_USE if exist "%ProgramFiles%\\Python311\\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\\Python311\\python.exe"
                             if not defined PYTHON_TO_USE (
                                 set "BOOTSTRAP_DIR=%CD%\\jenkins-miniconda3"
-                                set "BOOTSTRAP_EXE=%BOOTSTRAP_DIR%\\python.exe"
+                                set "BOOTSTRAP_EXE=!BOOTSTRAP_DIR!\\python.exe"
                                 set "INSTALLER=%CD%\\miniconda-installer.exe"
-                                if not exist "%BOOTSTRAP_EXE%" (
-                                    echo Bootstrapping Miniconda into %BOOTSTRAP_DIR%
-                                    where curl.exe >nul 2>nul && curl.exe -L "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" -o "%INSTALLER%"
-                                    if not exist "%INSTALLER%" powershell -NoProfile -ExecutionPolicy Bypass -Command "(New-Object System.Net.WebClient).DownloadFile('https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe', '%INSTALLER%')"
-                                    if not exist "%INSTALLER%" bitsadmin /transfer miniconda /download /priority foreground "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" "%INSTALLER%"
-                                    start /wait "" "%INSTALLER%" /InstallationType=JustMe /RegisterPython=0 /S /D=%BOOTSTRAP_DIR%
+                                if not exist "!BOOTSTRAP_EXE!" (
+                                    echo Bootstrapping Miniconda into !BOOTSTRAP_DIR!
+                                    if exist "!INSTALLER!" del /f /q "!INSTALLER!"
+                                    where curl.exe >nul 2>nul && curl.exe -L "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" -o "!INSTALLER!"
+                                    if not exist "!INSTALLER!" powershell -NoProfile -ExecutionPolicy Bypass -Command "(New-Object System.Net.WebClient).DownloadFile('https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe', '!INSTALLER!')"
+                                    if not exist "!INSTALLER!" bitsadmin /transfer miniconda /download /priority foreground "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" "!INSTALLER!"
+                                    if exist "!INSTALLER!" start /wait "" "!INSTALLER!" /InstallationType=JustMe /RegisterPython=0 /S /D=!BOOTSTRAP_DIR!
                                 )
-                                if exist "%BOOTSTRAP_EXE%" set "PYTHON_TO_USE=%BOOTSTRAP_EXE%"
+                                if exist "!BOOTSTRAP_EXE!" set "PYTHON_TO_USE=!BOOTSTRAP_EXE!"
                             )
                             if not defined PYTHON_TO_USE (
                                 echo ERROR: Python was not found and Miniconda bootstrap did not succeed.
@@ -112,9 +114,9 @@ pipeline {
                                 echo Example: C:\\Users\\YOURNAME\\AppData\\Local\\Programs\\Python\\Python310\\python.exe
                                 exit /b 1
                             )
-                            echo Using Python command: %PYTHON_TO_USE%
+                            echo Using Python command: !PYTHON_TO_USE!
                             if exist "%VENV_DIR%" rmdir /s /q "%VENV_DIR%"
-                            %PYTHON_TO_USE% -m venv "%VENV_DIR%"
+                            call !PYTHON_TO_USE! -m venv "%VENV_DIR%"
                             call "%VENV_DIR%\\Scripts\\activate.bat"
                             python -m pip install --upgrade pip
                             pip install -r requirements.txt
