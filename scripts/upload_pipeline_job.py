@@ -23,6 +23,11 @@ def resolve_relative_path(base_path, candidate):
     candidate_path = Path(candidate)
     if candidate_path.is_absolute():
         return str(candidate_path)
+
+    repo_relative = (ROOT / candidate_path).resolve()
+    if repo_relative.exists():
+        return str(repo_relative)
+
     return str((Path(base_path).parent / candidate_path).resolve())
 
 

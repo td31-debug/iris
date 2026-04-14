@@ -121,7 +121,7 @@ def evaluate_model(
         matrix=confusion_matrix(y, y_pred).tolist()
     )
     
-    print(f"✅ Model Evaluation:")
+    print("Model Evaluation:")
     print(f"   Accuracy: {accuracy:.4f}")
     print(f"   Precision: {precision:.4f}")
     print(f"   Recall: {recall:.4f}")
@@ -137,9 +137,9 @@ def deploy(
     """Deploy model to Vertex AI Endpoint"""
     from google.cloud import aiplatform
     
-    print(f"📤 Registering model for deployment...")
+    print("Registering model for deployment...")
     print(f"   Model path: {input_model.path}")
-    print(f"   Ready for deployment to Vertex AI endpoints")
+    print("   Ready for deployment to Vertex AI endpoints")
 
 # ===== Pipeline Definition =====
 
@@ -181,7 +181,7 @@ def compile_pipeline(package_path=None):
         package_path=str(output_path)
     )
 
-    print(f"✅ Pipeline compiled: {output_path}")
+    print(f"Pipeline compiled: {output_path}")
     return str(output_path)
 
 
@@ -193,7 +193,7 @@ def submit_pipeline(pipeline_path, run_name="iris-pipeline-run", pipeline_root=N
     credentials, _ = google_auth_default()
     aiplatform.init(project=PROJECT_ID, location=REGION, credentials=credentials)
 
-    print(f"\n🚀 Submitting pipeline to Vertex AI...")
+    print("\nSubmitting pipeline to Vertex AI...")
 
     job = aiplatform.PipelineJob(
         display_name=run_name,
@@ -204,7 +204,7 @@ def submit_pipeline(pipeline_path, run_name="iris-pipeline-run", pipeline_root=N
     )
 
     job.submit()
-    print(f"✅ Pipeline submitted!")
+    print("Pipeline submitted")
     print(f"   Job ID: {job.resource_name}")
 
     return job
