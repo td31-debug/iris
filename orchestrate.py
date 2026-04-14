@@ -19,22 +19,23 @@ FRAMEWORK_COMMANDS = {
 
 
 class Colors:
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BLUE = '\033[94m'
-    END = '\033[0m'
+    _ENABLED = sys.stdout.isatty() and os.environ.get("TERM")
+    GREEN = '\033[92m' if _ENABLED else ''
+    YELLOW = '\033[93m' if _ENABLED else ''
+    RED = '\033[91m' if _ENABLED else ''
+    BLUE = '\033[94m' if _ENABLED else ''
+    END = '\033[0m' if _ENABLED else ''
 
 
-def run_command(cmd, timeout=120):
-    """Run a shell command and capture its output."""
+def run_command(cmd, timeout=120, env=None):
+    """Run a command and capture its output."""
     try:
         result = subprocess.run(
             cmd,
-            shell=True,
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -45,7 +46,7 @@ def run_command(cmd, timeout=120):
 
 def setup_environment(credentials_path=None):
     """Validate and configure the credential path used by the workflow."""
-    print(f"\n{Colors.BLUE}═══ ENVIRONMENT SETUP ═══{Colors.END}")
+    print(f"\n{Colors.BLUE}=== ENVIRONMENT SETUP ==={Colors.END}")
 
     credential_candidate = (
         credentials_path
@@ -54,34 +55,31 @@ def setup_environment(credentials_path=None):
     )
 
     if not os.path.exists(credential_candidate):
-        print(f"{Colors.RED}❌ Missing credentials file: {credential_candidate}{Colors.END}")
+        print(f"{Colors.RED}ERROR: Missing credentials file: {credential_candidate}{Colors.END}")
         return False
 
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credential_candidate
-    print(f"{Colors.GREEN}✅ Credentials configured: {credential_candidate}{Colors.END}")
-    print(f"{Colors.GREEN}✅ Python executable: {sys.executable}{Colors.END}")
+    print(f"{Colors.GREEN}Credentials configured: {credential_candidate}{Colors.END}")
+    print(f"{Colors.GREEN}Python executable: {sys.executable}{Colors.END}")
     return True
 
 
 def submit_training_job(framework, timeout=300):
     """Submit a single framework training job to Vertex AI."""
     label, script_path, success_phrase = FRAMEWORK_COMMANDS[framework]
-    print(f"\n{Colors.BLUE}═══ {label} TRAINING ═══{Colors.END}")
-    print(f"🚀 Submitting {framework} training job...")
+    print(f"\n{Colors.BLUE}=== {label} TRAINING ==={Colors.END}")
+    print(f"Submitting {framework} training job...")
 
-    cmd = (
-        f'export GOOGLE_APPLICATION_CREDENTIALS="{os.environ["GOOGLE_APPLICATION_CREDENTIALS"]}" '
-        f'&& "{sys.executable}" "{script_path}"'
-    )
-    code, stdout, stderr = run_command(cmd, timeout=timeout)
+    cmd = [sys.executable, script_path]
+    code, stdout, stderr = run_command(cmd, timeout=timeout, env=os.environ.copy())
 
     combined_output = f"{stdout}\n{stderr}".lower()
     succeeded = code == 0 and success_phrase in combined_output
 
     if succeeded:
-        print(f"{Colors.GREEN}✅ {framework} job submitted{Colors.END}")
+        print(f"{Colors.GREEN}{framework} job submitted{Colors.END}")
     else:
-        print(f"{Colors.RED}❌ Failed to submit {framework} job{Colors.END}")
+        print(f"{Colors.RED}Failed to submit {framework} job{Colors.END}")
         failure_output = stderr.strip() or stdout.strip() or "No command output captured"
         print(failure_output[:1000])
 
@@ -90,14 +88,11 @@ def submit_training_job(framework, timeout=300):
 
 def list_training_jobs(limit=5):
     """List recent training jobs using the monitoring helper."""
-    print(f"\n{Colors.BLUE}═══ MONITORING JOBS ═══{Colors.END}")
-    print("📋 Recent training jobs:\n")
+    print(f"\n{Colors.BLUE}=== MONITORING JOBS ==={Colors.END}")
+    print("Recent training jobs:\n")
 
-    cmd = (
-        f'export GOOGLE_APPLICATION_CREDENTIALS="{os.environ["GOOGLE_APPLICATION_CREDENTIALS"]}" '
-        f'&& "{sys.executable}" "scripts/monitor_training.py" --list --limit {limit}'
-    )
-    code, stdout, stderr = run_command(cmd, timeout=120)
+    cmd = [sys.executable, "scripts/monitor_training.py", "--list", "--limit", str(limit)]
+    code, stdout, stderr = run_command(cmd, timeout=120, env=os.environ.copy())
 
     if stdout.strip():
         print(stdout.strip())
@@ -111,34 +106,34 @@ def list_training_jobs(limit=5):
 
 def show_summary(results):
     """Show a short summary of the supported workflows."""
-    print(f"\n{Colors.BLUE}═══ MLOPS PIPELINE SUMMARY ═══{Colors.END}\n")
+        print(f"\n{Colors.BLUE}=== MLOPS PIPELINE SUMMARY ==={Colors.END}\n")
 
     print(
         f"""
-{Colors.GREEN}✅ AVAILABLE WORKFLOWS:{Colors.END}
-  • Scikit-learn training
-  • TensorFlow/Keras training
-  • PyTorch training
-  • Vertex AI job monitoring
-  • Model deployment helpers
-  • Vertex AI Pipelines orchestration
+{Colors.GREEN}AVAILABLE WORKFLOWS:{Colors.END}
+    - Scikit-learn training
+    - TensorFlow/Keras training
+    - PyTorch training
+    - Vertex AI job monitoring
+    - Model deployment helpers
+    - Vertex AI Pipelines orchestration
 
 {Colors.YELLOW}GCP CONFIGURATION:{Colors.END}
-  • Project: {PROJECT_ID}
-  • Region: {REGION}
-  • Bucket: gs://{PROJECT_ID}-bucket
+    - Project: {PROJECT_ID}
+    - Region: {REGION}
+    - Bucket: gs://{PROJECT_ID}-bucket
 
 {Colors.YELLOW}JENKINS ENTRYPOINT:{Colors.END}
-  • python orchestrate.py --framework all
-  • python orchestrate.py --framework scikit-learn --skip-monitor
-  • python orchestrate.py --framework tensorflow --skip-monitor
-  • python orchestrate.py --framework pytorch --skip-monitor
+    - python orchestrate.py --framework all
+    - python orchestrate.py --framework scikit-learn --skip-monitor
+    - python orchestrate.py --framework tensorflow --skip-monitor
+    - python orchestrate.py --framework pytorch --skip-monitor
 """
     )
 
-    print(f"{Colors.BLUE}═══ TEST RESULTS ═══{Colors.END}")
+        print(f"{Colors.BLUE}=== TEST RESULTS ==={Colors.END}")
     for framework, status in results.items():
-        status_text = f"{Colors.GREEN}✅ PASS{Colors.END}" if status else f"{Colors.RED}❌ FAIL{Colors.END}"
+                status_text = f"{Colors.GREEN}PASS{Colors.END}" if status else f"{Colors.RED}FAIL{Colors.END}"
         print(f"  {framework.upper()}: {status_text}")
 
     passed = sum(1 for value in results.values() if value)
@@ -172,12 +167,12 @@ def main():
     )
     args = parser.parse_args()
 
-    print(f"\n{Colors.BLUE}╔════════════════════════════════════════╗{Colors.END}")
-    print(f"{Colors.BLUE}║   MLOPS PIPELINE - COMPLETE EXECUTION   ║{Colors.END}")
-    print(f"{Colors.BLUE}╚════════════════════════════════════════╝{Colors.END}")
+    print(f"\n{Colors.BLUE}========================================{Colors.END}")
+    print(f"{Colors.BLUE}MLOPS PIPELINE - COMPLETE EXECUTION{Colors.END}")
+    print(f"{Colors.BLUE}========================================{Colors.END}")
 
     if not setup_environment(args.credentials_path):
-        print(f"{Colors.RED}❌ Environment setup failed{Colors.END}")
+        print(f"{Colors.RED}Environment setup failed{Colors.END}")
         sys.exit(1)
 
     selected_frameworks = (
