@@ -180,6 +180,32 @@ PY
                                     '''
                                 }
                             }
+                        } else if (fileExists('gcp-key.json')) {
+                            def repoKeyPath = "${pwd()}/gcp-key.json"
+                            echo "Using repo-local GCP key file at ${repoKeyPath}"
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${repoKeyPath}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python - <<'PY'
+from google.auth import default
+creds, project = default()
+email = getattr(creds, 'service_account_email', 'unknown')
+print(f'Authenticated as: {email}')
+print(f'Project: {project}')
+PY
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                    '''
+                                }
+                            }
                         } else {
                             withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                                 if (isUnix()) {
@@ -280,6 +306,26 @@ PY
                                     '''
                                 }
                             }
+                        } else if (fileExists('gcp-key.json')) {
+                            def repoKeyPath = "${pwd()}/gcp-key.json"
+                            echo "Using repo-local GCP key file at ${repoKeyPath}"
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${repoKeyPath}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
+                                    '''
+                                }
+                            }
                         } else {
                             withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                                 if (isUnix()) {
@@ -311,6 +357,26 @@ PY
                         echo '🔎 Inspecting existing Vertex pipeline run...'
                         if (params.GCP_KEY_FILE?.trim()) {
                             withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
+                                    '''
+                                }
+                            }
+                        } else if (fileExists('gcp-key.json')) {
+                            def repoKeyPath = "${pwd()}/gcp-key.json"
+                            echo "Using repo-local GCP key file at ${repoKeyPath}"
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${repoKeyPath}"]) {
                                 if (isUnix()) {
                                     sh '''
                                         set -eu
@@ -378,6 +444,26 @@ PY
                                     '''
                                 }
                             }
+                        } else if (fileExists('gcp-key.json')) {
+                            def repoKeyPath = "${pwd()}/gcp-key.json"
+                            echo "Using repo-local GCP key file at ${repoKeyPath}"
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${repoKeyPath}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/monitor_training.py --list --limit 10
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\monitor_training.py --list --limit 10
+                                    '''
+                                }
+                            }
                         } else {
                             withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID, variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                                 if (isUnix()) {
@@ -415,6 +501,29 @@ PY
                         echo '🚀 Registering the provided model artifact...'
                         if (params.GCP_KEY_FILE?.trim()) {
                             withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${params.GCP_KEY_FILE}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
+                                        test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+                                        . "$VENV_DIR/bin/activate"
+                                        python scripts/deploy_model.py upload \
+                                            --model-path "$MODEL_ARTIFACT_PATH" \
+                                            --framework "$FRAMEWORK" \
+                                            --version "$MODEL_VERSION"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        if not exist "%GOOGLE_APPLICATION_CREDENTIALS%" exit /b 1
+                                        call "%VENV_DIR%\\Scripts\\activate.bat"
+                                        python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
+                                    '''
+                                }
+                            }
+                        } else if (fileExists('gcp-key.json')) {
+                            def repoKeyPath = "${pwd()}/gcp-key.json"
+                            echo "Using repo-local GCP key file at ${repoKeyPath}"
+                            withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${repoKeyPath}"]) {
                                 if (isUnix()) {
                                     sh '''
                                         set -eu
