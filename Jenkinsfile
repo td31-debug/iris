@@ -9,8 +9,8 @@ pipeline {
     parameters {
         choice(
             name: 'FRAMEWORK',
-            choices: ['all', 'scikit-learn', 'tensorflow', 'pytorch'],
-            description: 'Choose which training workflow to run'
+            choices: ['scikit-learn', 'tensorflow', 'pytorch', 'all'],
+            description: 'Framework to submit to Vertex AI. Use scikit-learn for the end-to-end default path or all to submit every training workflow.'
         )
         booleanParam(
             name: 'MONITOR_JOBS',
@@ -19,8 +19,8 @@ pipeline {
         )
         booleanParam(
             name: 'LOCAL_ONLY',
-            defaultValue: true,
-            description: 'Run only local setup, tests, and training on this machine without cloud authentication or cloud jobs'
+            defaultValue: false,
+            description: 'When true, stop after local setup, tests, and training. Leave false for the full Jenkins to Vertex AI workflow.'
         )
         booleanParam(
             name: 'DEPLOY_MODEL',
@@ -59,6 +59,17 @@ pipeline {
             steps {
                 echo '🔄 Checking out code...'
                 checkout scm
+            }
+        }
+
+        stage('Pipeline Parameters') {
+            steps {
+                echo "FRAMEWORK=${params.FRAMEWORK}"
+                echo "LOCAL_ONLY=${params.LOCAL_ONLY}"
+                echo "MONITOR_JOBS=${params.MONITOR_JOBS}"
+                echo "DEPLOY_MODEL=${params.DEPLOY_MODEL}"
+                echo "VERTEX_PIPELINE_RUN=${params.VERTEX_PIPELINE_RUN ?: '(empty)'}"
+                echo "MODEL_ARTIFACT_PATH=${params.MODEL_ARTIFACT_PATH ?: '(empty)'}"
             }
         }
 
@@ -127,31 +138,32 @@ pipeline {
         }
 
         stage('Validate Credentials') {
-            when {
-                expression { return !params.LOCAL_ONLY }
-            }
             steps {
-                echo '🔐 Validating GCP credentials...'
-                withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
-                                . "$VENV_DIR/bin/activate"
-                                python - <<'PY'
+                script {
+                    if (params.LOCAL_ONLY) {
+                        echo 'LOCAL_ONLY=true, so cloud credential validation is intentionally bypassed.'
+                    } else {
+                        echo '🔐 Validating GCP credentials...'
+                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    . "$VENV_DIR/bin/activate"
+                                    python - <<'PY'
 from google.auth import default
 creds, project = default()
 email = getattr(creds, 'service_account_email', 'unknown')
 print(f'Authenticated as: {email}')
 print(f'Project: {project}')
 PY
-                            '''
-                        } else {
-                            bat '''
-                                @echo off
-                                call "%VENV_DIR%\\Scripts\\activate.bat"
-                                python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
-                            '''
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
+                                    python -c "from google.auth import default; creds, project = default(); print(f'Authenticated as: {getattr(creds, ''service_account_email'', ''unknown'')}'); print(f'Project: {project}')"
+                                '''
+                            }
                         }
                     }
                 }
@@ -204,25 +216,28 @@ PY
         }
 
         stage('Submit Training Job') {
-            when {
-                expression { return !params.LOCAL_ONLY && !params.VERTEX_PIPELINE_RUN?.trim() }
-            }
             steps {
-                echo "🤖 Submitting ${params.FRAMEWORK} training workflow..."
-                withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
-                                . "$VENV_DIR/bin/activate"
-                                python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
-                            '''
-                        } else {
-                            bat '''
-                                @echo off
-                                call "%VENV_DIR%\\Scripts\\activate.bat"
-                                python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
-                            '''
+                script {
+                    if (params.LOCAL_ONLY) {
+                        echo 'LOCAL_ONLY=true, so no Vertex training job will be submitted.'
+                    } else if (params.VERTEX_PIPELINE_RUN?.trim()) {
+                        echo 'Existing VERTEX_PIPELINE_RUN provided, so new training submission is skipped by design.'
+                    } else {
+                        echo "🤖 Submitting ${params.FRAMEWORK} training workflow..."
+                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    . "$VENV_DIR/bin/activate"
+                                    python orchestrate.py --framework "$FRAMEWORK" --skip-monitor
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
+                                    python orchestrate.py --framework "%FRAMEWORK%" --skip-monitor
+                                '''
+                            }
                         }
                     }
                 }
@@ -230,51 +245,57 @@ PY
         }
 
         stage('Inspect Vertex Pipeline Run') {
-            when {
-                expression { return !params.LOCAL_ONLY && params.VERTEX_PIPELINE_RUN?.trim() }
-            }
             steps {
-                echo '🔎 Inspecting existing Vertex pipeline run...'
-                withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
-                                . "$VENV_DIR/bin/activate"
-                                python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
-                            '''
-                        } else {
-                            bat '''
-                                @echo off
-                                call "%VENV_DIR%\\Scripts\\activate.bat"
-                                python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
-                            '''
+                script {
+                    if (params.LOCAL_ONLY) {
+                        echo 'LOCAL_ONLY=true, so existing Vertex pipeline inspection is bypassed.'
+                    } else if (params.VERTEX_PIPELINE_RUN?.trim()) {
+                        echo '🔎 Inspecting existing Vertex pipeline run...'
+                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    . "$VENV_DIR/bin/activate"
+                                    python scripts/monitor_vertex_pipeline_run.py --run "$VERTEX_PIPELINE_RUN"
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
+                                    python scripts\\monitor_vertex_pipeline_run.py --run "%VERTEX_PIPELINE_RUN%"
+                                '''
+                            }
                         }
+                    } else {
+                        echo 'No VERTEX_PIPELINE_RUN value was provided, so this stage has nothing to inspect.'
                     }
                 }
             }
         }
 
         stage('Monitor Recent Jobs') {
-            when {
-                expression { return !params.LOCAL_ONLY && params.MONITOR_JOBS }
-            }
             steps {
-                echo '📋 Listing recent Vertex AI jobs...'
-                withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
-                                . "$VENV_DIR/bin/activate"
-                                python scripts/monitor_training.py --list --limit 10
-                            '''
-                        } else {
-                            bat '''
-                                @echo off
-                                call "%VENV_DIR%\\Scripts\\activate.bat"
-                                python scripts\\monitor_training.py --list --limit 10
-                            '''
+                script {
+                    if (params.LOCAL_ONLY) {
+                        echo 'LOCAL_ONLY=true, so cloud job monitoring is bypassed.'
+                    } else if (!params.MONITOR_JOBS) {
+                        echo 'MONITOR_JOBS=false, so recent Vertex AI jobs will not be listed.'
+                    } else {
+                        echo '📋 Listing recent Vertex AI jobs...'
+                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    . "$VENV_DIR/bin/activate"
+                                    python scripts/monitor_training.py --list --limit 10
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
+                                    python scripts\\monitor_training.py --list --limit 10
+                                '''
+                            }
                         }
                     }
                 }
@@ -282,28 +303,35 @@ PY
         }
 
         stage('Optional Deploy') {
-            when {
-                expression { return !params.LOCAL_ONLY && params.DEPLOY_MODEL && params.FRAMEWORK != 'all' && params.MODEL_ARTIFACT_PATH?.trim() }
-            }
             steps {
-                echo '🚀 Registering the provided model artifact...'
-                withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
-                                . "$VENV_DIR/bin/activate"
-                                python scripts/deploy_model.py upload \
-                                    --model-path "$MODEL_ARTIFACT_PATH" \
-                                    --framework "$FRAMEWORK" \
-                                    --version "$MODEL_VERSION"
-                            '''
-                        } else {
-                            bat '''
-                                @echo off
-                                call "%VENV_DIR%\\Scripts\\activate.bat"
-                                python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
-                            '''
+                script {
+                    if (params.LOCAL_ONLY) {
+                        echo 'LOCAL_ONLY=true, so deployment is bypassed.'
+                    } else if (!params.DEPLOY_MODEL) {
+                        echo 'DEPLOY_MODEL=false, so model registry upload is intentionally skipped.'
+                    } else if (params.FRAMEWORK == 'all') {
+                        echo 'DEPLOY_MODEL=true but FRAMEWORK=all. Choose a single framework to deploy a specific model artifact.'
+                    } else if (!params.MODEL_ARTIFACT_PATH?.trim()) {
+                        echo 'DEPLOY_MODEL=true but MODEL_ARTIFACT_PATH is empty. Provide a gs:// model artifact path to enable deployment.'
+                    } else {
+                        echo '🚀 Registering the provided model artifact...'
+                        withCredentials([file(credentialsId: 'gcp-vertex-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    . "$VENV_DIR/bin/activate"
+                                    python scripts/deploy_model.py upload \
+                                        --model-path "$MODEL_ARTIFACT_PATH" \
+                                        --framework "$FRAMEWORK" \
+                                        --version "$MODEL_VERSION"
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    call "%VENV_DIR%\\Scripts\\activate.bat"
+                                    python scripts\\deploy_model.py upload --model-path "%MODEL_ARTIFACT_PATH%" --framework "%FRAMEWORK%" --version "%MODEL_VERSION%"
+                                '''
+                            }
                         }
                     }
                 }
