@@ -94,12 +94,14 @@ pipeline {
                             if not defined PYTHON_TO_USE if exist "%ProgramFiles%\\Python310\\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\\Python310\\python.exe"
                             if not defined PYTHON_TO_USE if exist "%ProgramFiles%\\Python311\\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\\Python311\\python.exe"
                             if not defined PYTHON_TO_USE (
-                                set "BOOTSTRAP_DIR=%WORKSPACE%\\jenkins-miniconda3"
+                                set "BOOTSTRAP_DIR=%CD%\\jenkins-miniconda3"
                                 set "BOOTSTRAP_EXE=%BOOTSTRAP_DIR%\\python.exe"
-                                set "INSTALLER=%WORKSPACE%\\miniconda-installer.exe"
+                                set "INSTALLER=%CD%\\miniconda-installer.exe"
                                 if not exist "%BOOTSTRAP_EXE%" (
                                     echo Bootstrapping Miniconda into %BOOTSTRAP_DIR%
-                                    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe' -OutFile '%INSTALLER%'"
+                                    where curl.exe >nul 2>nul && curl.exe -L "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" -o "%INSTALLER%"
+                                    if not exist "%INSTALLER%" powershell -NoProfile -ExecutionPolicy Bypass -Command "(New-Object System.Net.WebClient).DownloadFile('https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe', '%INSTALLER%')"
+                                    if not exist "%INSTALLER%" bitsadmin /transfer miniconda /download /priority foreground "https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe" "%INSTALLER%"
                                     start /wait "" "%INSTALLER%" /InstallationType=JustMe /RegisterPython=0 /S /D=%BOOTSTRAP_DIR%
                                 )
                                 if exist "%BOOTSTRAP_EXE%" set "PYTHON_TO_USE=%BOOTSTRAP_EXE%"
