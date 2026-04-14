@@ -1,4 +1,4 @@
-azure-identity==1.16.0
+azure-identity==1.25.3
 azure-ai-ml==1.15.0
 scikit-learn==1.5.1
 joblib==1.4.2
