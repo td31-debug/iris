@@ -94,7 +94,18 @@ pipeline {
                             if not defined PYTHON_TO_USE if exist "%ProgramFiles%\\Python310\\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\\Python310\\python.exe"
                             if not defined PYTHON_TO_USE if exist "%ProgramFiles%\\Python311\\python.exe" set "PYTHON_TO_USE=%ProgramFiles%\\Python311\\python.exe"
                             if not defined PYTHON_TO_USE (
-                                echo ERROR: Python was not found for the Jenkins service account.
+                                set "BOOTSTRAP_DIR=%WORKSPACE%\\jenkins-miniconda3"
+                                set "BOOTSTRAP_EXE=%BOOTSTRAP_DIR%\\python.exe"
+                                set "INSTALLER=%WORKSPACE%\\miniconda-installer.exe"
+                                if not exist "%BOOTSTRAP_EXE%" (
+                                    echo Bootstrapping Miniconda into %BOOTSTRAP_DIR%
+                                    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Windows-x86_64.exe' -OutFile '%INSTALLER%'"
+                                    start /wait "" "%INSTALLER%" /InstallationType=JustMe /RegisterPython=0 /S /D=%BOOTSTRAP_DIR%
+                                )
+                                if exist "%BOOTSTRAP_EXE%" set "PYTHON_TO_USE=%BOOTSTRAP_EXE%"
+                            )
+                            if not defined PYTHON_TO_USE (
+                                echo ERROR: Python was not found and Miniconda bootstrap did not succeed.
                                 echo Set the PYTHON_CMD build parameter to py -3.10, python, or the full path to python.exe.
                                 echo Example: C:\\Users\\YOURNAME\\AppData\\Local\\Programs\\Python\\Python310\\python.exe
                                 exit /b 1
