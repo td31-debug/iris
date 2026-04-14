@@ -14,10 +14,10 @@ BUCKET = f"gs://{PROJECT_ID}-bucket"
 # Load credentials properly
 try:
     credentials, project = google_auth_default()
-    print(f"✅ Credentials loaded successfully")
+    print("Credentials loaded successfully")
     print(f"Project: {project}")
 except Exception as e:
-    print(f"❌ Error loading credentials: {e}")
+    print(f"Error loading credentials: {e}")
     raise
 
 # Initialize Vertex AI
@@ -27,7 +27,7 @@ aiplatform.init(
     staging_bucket=BUCKET,
     credentials=credentials
 )
-print(f"✅ Vertex AI initialized — project: {PROJECT_ID}")
+print(f"Vertex AI initialized - project: {PROJECT_ID}")
 
 # Define and submit a real Vertex AI CustomJob from the local TensorFlow script
 job = aiplatform.CustomJob.from_local_script(
@@ -49,9 +49,9 @@ job = aiplatform.CustomJob.from_local_script(
     credentials=credentials,
 )
 
-print("📤 Submitting TensorFlow training job to Vertex AI...")
+print("Submitting TensorFlow training job to Vertex AI...")
 job.submit()
 
-print("✅ TensorFlow training job submitted successfully!")
-print(f"🆔 Resource name: {job.resource_name}")
-print(f"📊 Monitor at: https://console.cloud.google.com/vertex-ai/training/custom-jobs?project={PROJECT_ID}")
+print("TensorFlow training job submitted successfully!")
+print(f"Resource name: {job.resource_name}")
+print(f"Monitor at: https://console.cloud.google.com/vertex-ai/training/custom-jobs?project={PROJECT_ID}")
